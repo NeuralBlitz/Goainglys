@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Registry</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .header h1 { color: #00d4ff; font-size: 2.5em; }
+        .header .subtitle { color: #888; margin-top: 5px; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px 20px;
+            text-align: center;
+        }
+        .stat-card .label { color: #888; font-size: 0.85em; text-transform: uppercase; }
+        .stat-card .value { color: #00d4ff; font-size: 1.8em; font-weight: bold; }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #00d4ff;
+            color: #1a1a2e;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .btn:hover { background: #00b8e6; }
+        .btn-danger { background: #ff6b6b; }
+        .btn-success { background: #51cf66; }
+        .search-box { margin-bottom: 20px; }
+        .search-box input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 5px;
+            color: #fff;
+            font-size: 16px;
+        }
+        .models-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .model-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .model-card h3 { color: #00d4ff; margin-bottom: 10px; }
+        .model-card .meta { color: #888; font-size: 0.9em; margin-bottom: 10px; }
+        .model-card .versions { margin-top: 15px; }
+        .version-item {
+            background: rgba(255,255,255,0.03);
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 8px;
+            font-size: 0.85em;
+        }
+        .stage-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.75em;
+            text-transform: uppercase;
+        }
+        .stage-REGISTERED { background: #6c757d; }
+        .stage-STAGING { background: #ffc107; color: #000; }
+        .stage-PRODUCTION { background: #28a745; }
+        .stage-ARCHIVED { background: #495057; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #1a1a2e;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-content h2 { color: #00d4ff; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #888; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 5px;
+            color: #fff;
+        }
+        .actions { margin-top: 15px; display: flex; gap: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Model Registry</h1>
+            <div class="subtitle">ML Model Versioning & Management</div>
+        </div>
+
+        <div class="stats-grid" id="stats"></div>
+
+        <div class="search-box">
+            <input type="text" id="search" placeholder="Search models..." oninput="loadModels(this.value)">
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <button class="btn" onclick="showCreateModel()">+ New Model</button>
+        </div>
+
+        <div class="models-grid" id="models"></div>
+    </div>
+
+    <div class="modal" id="createModelModal">
+        <div class="modal-content">
+            <h2>Create Model</h2>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="modelName">
+            </div>
+            <div class="form-group">
+                <label>Framework</label>
+                <select id="modelFramework">
+                    <option value="pytorch">PyTorch</option>
+                    <option value="tensorflow">TensorFlow</option>
+                    <option value="jax">JAX</option>
+                    <option value="onnx">ONNX</option>
+                    <option value="sklearn">Scikit-learn</option>
+                    <option value="xgboost">XGBoost</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="modelDesc" rows="3"></textarea>
+            </div>
+            <div class="actions">
+                <button class="btn" onclick="createModel()">Create</button>
+                <button class="btn btn-danger" onclick="hideModal('createModelModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="registerVersionModal">
+        <div class="modal-content">
+            <h2>Register Version</h2>
+            <input type="hidden" id="regModelId">
+            <div class="form-group">
+                <label>Version</label>
+                <input type="text" id="regVersion" placeholder="e.g., 1.0.0">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="regDesc" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Created By</label>
+                <input type="text" id="regCreator">
+            </div>
+            <div class="form-group">
+                <label>Metrics (JSON)</label>
+                <textarea id="regMetrics" rows="2" placeholder='{"accuracy": 0.95, "loss": 0.05}'></textarea>
+            </div>
+            <div class="form-group">
+                <label>Parameters (JSON)</label>
+                <textarea id="regParams" rows="2" placeholder='{"lr": 0.001, "batch_size": 32}'></textarea>
+            </div>
+            <div class="actions">
+                <button class="btn" onclick="registerVersion()">Register</button>
+                <button class="btn btn-danger" onclick="hideModal('registerVersionModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadSummary() {
+            try {
+                const resp = await fetch('/api/summary');
+                const data = await resp.json();
+                document.getElementById('stats').innerHTML = `
+                    <div class="stat-card">
+                        <div class="label">Total Models</div>
+                        <div class="value">${data.total_models}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Total Versions</div>
+                        <div class="value">${data.total_versions}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Production</div>
+                        <div class="value">${data.by_stage?.PRODUCTION || 0}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Staging</div>
+                        <div class="value">${data.by_stage?.STAGING || 0}</div>
+                    </div>
+                `;
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadModels(query) {
+            query = query || '';
+            try {
+                const url = query ? '/api/search?q=' + encodeURIComponent(query) : '/api/models';
+                const resp = await fetch(url);
+                const data = await resp.json();
+                const models = query ? data.models : data.models;
+                
+                document.getElementById('models').innerHTML = models.map(function(m) {
+                    var versionsHtml = (m.versions || []).map(function(v) {
+                        var metricsStr = '';
+                        if (v.metrics) {
+                            var pairs = [];
+                            for (var key in v.metrics) {
+                                pairs.push(key + ': ' + v.metrics[key].toFixed(4));
+                            }
+                            metricsStr = '<br><small>' + pairs.join(', ') + '</small>';
+                        }
+                        return '<div class="version-item"><strong>v' + v.version + '</strong> ' +
+                            '<span class="stage-badge stage-' + v.stage + '">' + v.stage + '</span>' +
+                            metricsStr + '<br><small>' + (v.created_by || '') + ' | ' + 
+                            new Date(v.created_at).toLocaleDateString() + '</small></div>';
+                    }).join('');
+                    
+                    return '<div class="model-card"><h3>' + m.name + '</h3><div class="meta">' +
+                        '<span>' + m.framework + '</span> | <span>' + (m.versions ? m.versions.length : 0) + ' versions</span></div>' +
+                        '<p>' + (m.description || '') + '</p>' +
+                        '<button class="btn" style="margin-top:10px;padding:5px 10px;font-size:0.8em" onclick="showRegisterVersion(\'' + m.id + '\')">+ Version</button>' +
+                        '<div class="versions">' + versionsHtml + '</div></div>';
+                }).join('') || '<p style="color:#888">No models found</p>';
+            } catch (e) { console.error(e); }
+        }
+
+        function showCreateModel() { document.getElementById('createModelModal').classList.add('active'); }
+        function showRegisterVersion(modelId) { 
+            document.getElementById('regModelId').value = modelId;
+            document.getElementById('registerVersionModal').classList.add('active'); 
+        }
+        function hideModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        async function createModel() {
+            var name = document.getElementById('modelName').value;
+            var framework = document.getElementById('modelFramework').value;
+            var description = document.getElementById('modelDesc').value;
+
+            await fetch('/api/models', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, framework: framework, description: description })
+            });
+
+            hideModal('createModelModal');
+            loadModels();
+            loadSummary();
+        }
+
+        async function registerVersion() {
+            var modelId = document.getElementById('regModelId').value;
+            var version = document.getElementById('regVersion').value;
+            var description = document.getElementById('regDesc').value;
+            var created_by = document.getElementById('regCreator').value;
+            var metrics = {};
+            var params = {};
+            try { metrics = JSON.parse(document.getElementById('regMetrics').value || '{}'); } catch(e) {}
+            try { params = JSON.parse(document.getElementById('regParams').value || '{}'); } catch(e) {}
+
+            await fetch('/api/models/' + modelId + '/versions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    version: version, 
+                    description: description, 
+                    created_by: created_by, 
+                    metrics: metrics,
+                    params: params
+                })
+            });
+
+            hideModal('registerVersionModal');
+            loadModels();
+            loadSummary();
+        }
+
+        loadSummary();
+        loadModels();
+        setInterval(function() { 
+            loadSummary(); 
+            loadModels(document.getElementById('search').value); 
+        }, 5000);
+    </script>
+</body>
+</html>

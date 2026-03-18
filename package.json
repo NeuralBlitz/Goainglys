@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "localai": "^0.0.1",
+    "pyright": "^1.1.408",
+    "yaml-language-server": "^1.21.0"
+  }
+}

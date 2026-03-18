@@ -1,0 +1,94 @@
+{
+  "avg_retrieval": {
+    "recall": 0.7373737373737373,
+    "precision": 0.9333333333333332,
+    "f1_score": 0.7982570806100218,
+    "mrr": 1,
+    "map": 0.9833333333333334,
+    "ndcg": 2.8049002661882607
+  },
+  "avg_generation": {
+    "bleu1": 0.5500176197639461,
+    "bleu2": 0.4047682236524927,
+    "bleu3": 0.2269787794897411,
+    "rouge1": 0.7333333333333334,
+    "rouge2": 0.42424242424242425,
+    "rougeL": 0.5722222222222222,
+    "jaccard": 0.44871794871794873
+  },
+  "avg_context_relevancy": 0.21418951418951418,
+  "avg_answer_relevancy": 0.6297116651647934,
+  "avg_faithfulness": 0.2617869711987359,
+  "avg_overall": 0.6593287885129205,
+  "metrics": [
+    {
+      "question": "What is the capital of France?",
+      "retrieval": {
+        "recall": 0.6666666666666666,
+        "precision": 1,
+        "f1_score": 0.8,
+        "mrr": 1,
+        "map": 1,
+        "ndcg": 2.948459118879392
+      },
+      "generation": {
+        "bleu1": 0.6,
+        "bleu2": 0.4444444444444444,
+        "bleu3": 0.25,
+        "rouge1": 0.6666666666666666,
+        "rouge2": 0.4444444444444444,
+        "rougeL": 0.6,
+        "jaccard": 0.46153846153846156
+      },
+      "context_relevancy": 0.44733044733044736,
+      "answer_relevancy": 0.6324555320336759,
+      "faithfulness": 0.4277289377289377
+    },
+    {
+      "question": "What is photosynthesis?",
+      "retrieval": {
+        "recall": 0.5454545454545454,
+        "precision": 1,
+        "f1_score": 0.7058823529411764,
+        "mrr": 1,
+        "map": 1,
+        "ndcg": 2.948459118879392
+      },
+      "generation": {
+        "bleu1": 0.6333861926251716,
+        "bleu2": 0.49713295378576094,
+        "bleu3": 0.3309363384692233,
+        "rouge1": 0.7,
+        "rouge2": 0.5555555555555556,
+        "rougeL": 0.7,
+        "jaccard": 0.5
+      },
+      "context_relevancy": 0.09801587301587301,
+      "answer_relevancy": 0.6674238124719146,
+      "faithfulness": 0.15743589743589745
+    },
+    {
+      "question": "Who wrote Romeo and Juliet?",
+      "retrieval": {
+        "recall": 1,
+        "precision": 0.8,
+        "f1_score": 0.888888888888889,
+        "mrr": 1,
+        "map": 0.95,
+        "ndcg": 2.517782560805999
+      },
+      "generation": {
+        "bleu1": 0.4166666666666667,
+        "bleu2": 0.2727272727272727,
+        "bleu3": 0.1,
+        "rouge1": 0.8333333333333334,
+        "rouge2": 0.2727272727272727,
+        "rougeL": 0.4166666666666667,
+        "jaccard": 0.38461538461538464
+      },
+      "context_relevancy": 0.09722222222222222,
+      "answer_relevancy": 0.5892556509887896,
+      "faithfulness": 0.20019607843137255
+    }
+  ]
+}

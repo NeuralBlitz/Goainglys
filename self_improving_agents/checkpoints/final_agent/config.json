@@ -1,0 +1,1 @@
+{MaxCycles:20 PerformanceTarget:0.9 MinImprovementThreshold:0.02 ExamplesPerWeakness:50 DifficultyProgression:0.05 LearningRate:0.0001 LoRARank:8 LoRAAlpha:16 ValidationSetSize:30 EvaluationFrequency:1 MetaLearningRate:0.01 StrategyExploration:0.2 CheckpointFrequency:5 ExperienceStoreSize:1000 Device:CPU}
