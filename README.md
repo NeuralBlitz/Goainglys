@@ -1,4 +1,5 @@
-# Native Go ML Projects Collection
+# GOAINGLYS
+Native Go ML Projects Collection
 
 A comprehensive collection of machine learning and deep learning implementations written in **pure Go** with no external dependencies.
 
