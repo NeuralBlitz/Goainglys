@@ -1,6 +1,6 @@
 <img width="3840" height="2160" alt="image" src="https://github.com/user-attachments/assets/68f2f7d5-ef22-4e6b-a4cb-a706fbe7ccd4" />
 
-# GOAINGLYS
+
 Native Go ML Projects Collection
 
 A comprehensive collection of machine learning and deep learning implementations written in **pure Go** with no external dependencies.
