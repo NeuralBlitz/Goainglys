@@ -447,3 +447,4 @@ MIT License - Free to use, modify, and distribute.
 ---
 
 *Built with ❤️ in pure Go*
+![image](https://github.com/user-attachments/assets/fc29028c-60b5-4080-8ace-55269f7408b7)
