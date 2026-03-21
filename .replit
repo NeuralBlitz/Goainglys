@@ -21,6 +21,10 @@ deploymentTarget = "gce"
 expertMode = true
 
 [[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
 localPort = 8080
 externalPort = 80
 
@@ -40,9 +44,10 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "go run main.go"
-
-[workflows.workflow.metadata]
-outputType = "console"
+args = "cd portal && GOWORK=off go run ."
+waitForPort = 5000
