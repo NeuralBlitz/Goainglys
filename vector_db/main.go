@@ -14,6 +14,7 @@ type VectorDB struct {
 	metric    SimilarityMetric
 	dimension int
 	index     *HNSWIndex
+	store     *PersistentStore // optional persistence
 }
 
 // NewVectorDB creates a new vector database
@@ -25,6 +26,58 @@ func NewVectorDB(dimension int, metric SimilarityMetric) *VectorDB {
 		dimension: dimension,
 		index:     NewHNSWIndex(dimension, metric),
 	}
+}
+
+// NewPersistentVectorDB opens or creates a persistent vector database
+func NewPersistentVectorDB(dimension int, metric SimilarityMetric, dataDir string) (*VectorDB, error) {
+	store, err := NewPersistentStore(dataDir)
+	if err != nil {
+		return nil, err
+	}
+
+	db := &VectorDB{
+		vectors:   make(map[string][]float64),
+		metadata:  make(map[string]map[string]interface{}),
+		metric:    metric,
+		dimension: dimension,
+		index:     NewHNSWIndex(dimension, metric),
+		store:     store,
+	}
+
+	// Recover from snapshot + WAL
+	if err := Recover(db, store); err != nil {
+		return nil, fmt.Errorf("recover: %w", err)
+	}
+
+	// Open WAL for new writes
+	if err := store.OpenWAL(); err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+// Close flushes and closes persistence resources
+func (db *VectorDB) Close() error {
+	if db.store != nil {
+		return db.store.CloseWAL()
+	}
+	return nil
+}
+
+// Snapshot creates a point-in-time snapshot and compacts the WAL
+func (db *VectorDB) Snapshot() (string, error) {
+	if db.store == nil {
+		return "", fmt.Errorf("persistence not enabled")
+	}
+	path, err := db.store.SaveSnapshot(db)
+	if err != nil {
+		return "", err
+	}
+	if err := db.store.CompactWAL(db); err != nil {
+		return path, err
+	}
+	return path, nil
 }
 
 // Insert adds a vector to the database
@@ -39,6 +92,12 @@ func (db *VectorDB) Insert(id string, vector []float64, metadata map[string]inte
 	}
 
 	db.index.Add(id, vector)
+
+	if db.store != nil {
+		if err := db.store.WALAppendInsert(id, vector, metadata); err != nil {
+			return fmt.Errorf("WAL append: %w", err)
+		}
+	}
 	return nil
 }
 
