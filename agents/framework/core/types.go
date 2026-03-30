@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -237,6 +238,31 @@ func (r *AgentRegistry) List() []Agent {
 func RunAgent(agent Agent, input string) (*AgentResult, error) {
 	ctx := context.Background()
 	return agent.Run(ctx, input)
+}
+
+// buildToolsDescription formats tools for inclusion in agent prompts.
+// Shared by ReAct, PlanExecute, and other agents.
+func buildToolsDescription(tools map[string]core.Tool) string {
+	if len(tools) == 0 {
+		return "No tools available."
+	}
+
+	var desc strings.Builder
+	for _, tool := range tools {
+		desc.WriteString(fmt.Sprintf("## %s\n", tool.Name()))
+		desc.WriteString(fmt.Sprintf("%s\n", tool.Description()))
+		desc.WriteString("Parameters:\n")
+		for paramName, param := range tool.Parameters() {
+			required := ""
+			if param.Required {
+				required = " (required)"
+			}
+			desc.WriteString(fmt.Sprintf("  - %s: %s%s\n", paramName, param.Description, required))
+		}
+		desc.WriteString("\n")
+	}
+
+	return desc.String()
 }
 
 func GenerateID() string {
