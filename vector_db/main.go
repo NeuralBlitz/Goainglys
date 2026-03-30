@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -114,6 +116,12 @@ func (db *VectorDB) BulkInsert(items []VectorItem) error {
 		}
 
 		db.index.Add(item.ID, item.Vector)
+
+		if db.store != nil {
+			if err := db.store.WALAppendInsert(item.ID, item.Vector, item.Metadata); err != nil {
+				return fmt.Errorf("WAL append: %w", err)
+			}
+		}
 	}
 	return nil
 }
@@ -185,8 +193,6 @@ func (db *VectorDB) Update(id string, vector []float64, metadata map[string]inte
 		return fmt.Errorf("vector not found: %s", id)
 	}
 
-	// For HNSW, we need to lock both DB and index
-	// Simple approach: delete and re-insert
 	delete(db.vectors, id)
 	delete(db.metadata, id)
 	db.index.Delete(id)
@@ -196,6 +202,12 @@ func (db *VectorDB) Update(id string, vector []float64, metadata map[string]inte
 		db.metadata[id] = metadata
 	}
 	db.index.Add(id, vector)
+
+	if db.store != nil {
+		if err := db.store.WALAppendUpdate(id, vector, metadata); err != nil {
+			return fmt.Errorf("WAL append: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -209,6 +221,12 @@ func (db *VectorDB) Delete(id string) error {
 	delete(db.vectors, id)
 	delete(db.metadata, id)
 	db.index.Delete(id)
+
+	if db.store != nil {
+		if err := db.store.WALAppendDelete(id); err != nil {
+			return fmt.Errorf("WAL append: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -429,4 +447,104 @@ func main() {
 	fmt.Printf("Brute force: %d calculations in %v\n", matches, bfTime)
 
 	fmt.Printf("\n=== Vector Database Complete ===\n")
+
+	// Persistence demo
+	demoPersistence()
+}
+
+func demoPersistence() {
+	fmt.Println("\n" + string(make([]byte, 60)))
+	fmt.Println("  PERSISTENCE DEMO (WAL + Snapshots)")
+	fmt.Println(string(make([]byte, 60)))
+
+	dataDir := "/tmp/vectordb_test"
+	os.RemoveAll(dataDir)
+	defer os.RemoveAll(dataDir)
+
+	// Create persistent DB
+	db, err := NewPersistentVectorDB(64, CosineSimilarity, dataDir)
+	if err != nil {
+		fmt.Printf("Error creating persistent DB: %v\n", err)
+		return
+	}
+
+	// Insert vectors
+	fmt.Println("\nInserting 100 vectors with WAL...")
+	for i := 0; i < 100; i++ {
+		id := fmt.Sprintf("pvec-%d", i)
+		meta := map[string]interface{}{
+			"category": fmt.Sprintf("cat-%d", i%5),
+			"index":    float64(i),
+		}
+		db.Insert(id, randVec(64), meta)
+	}
+	fmt.Printf("Inserted %d vectors. WAL size: %d bytes\n", db.Count(), db.store.WALSize())
+
+	// Search
+	query := randVec(64)
+	results, _ := db.Search(query, 3)
+	fmt.Printf("\nSearch found %d results:\n", len(results))
+	for i, r := range results {
+		fmt.Printf("  %d. %s (score=%.4f)\n", i+1, r.ID, r.Score)
+	}
+
+	// Delete some vectors
+	for i := 0; i < 10; i++ {
+		db.Delete(fmt.Sprintf("pvec-%d", i))
+	}
+	fmt.Printf("\nAfter deleting 10: %d vectors remain\n", db.Count())
+
+	// Snapshot
+	fmt.Println("\nCreating snapshot...")
+	snapPath, err := db.Snapshot()
+	if err != nil {
+		fmt.Printf("Snapshot error: %v\n", err)
+	} else {
+		fmt.Printf("Snapshot saved: %s\n", snapPath)
+		fmt.Printf("WAL size after compaction: %d bytes\n", db.store.WALSize())
+	}
+
+	// List snapshots
+	snaps, _ := db.store.ListSnapshots()
+	fmt.Printf("Snapshots on disk: %d\n", len(snaps))
+	for _, s := range snaps {
+		fmt.Printf("  %s (seq=%d, size=%d bytes)\n", filepath.Base(s.Path), s.SeqNum, s.Size)
+	}
+
+	db.Close()
+
+	// Recover from snapshot + WAL
+	fmt.Println("\nRecovering database from snapshot...")
+	db2, err := NewPersistentVectorDB(64, CosineSimilarity, dataDir)
+	if err != nil {
+		fmt.Printf("Recovery error: %v\n", err)
+		return
+	}
+	fmt.Printf("Recovered %d vectors\n", db2.Count())
+
+	// Verify search works after recovery
+	results2, _ := db2.Search(query, 3)
+	fmt.Printf("Post-recovery search found %d results:\n", len(results2))
+	for i, r := range results2 {
+		fmt.Printf("  %d. %s (score=%.4f)\n", i+1, r.ID, r.Score)
+	}
+
+	// Verify deleted vectors are gone
+	_, _, err = db2.Get("pvec-5")
+	if err != nil {
+		fmt.Println("✓ Correctly missing deleted vector pvec-5")
+	}
+
+	// Insert more after recovery
+	for i := 100; i < 110; i++ {
+		db2.Insert(fmt.Sprintf("pvec-%d", i), randVec(64), nil)
+	}
+	fmt.Printf("After post-recovery inserts: %d vectors\n", db2.Count())
+
+	// Final snapshot
+	snapPath2, _ := db2.Snapshot()
+	fmt.Printf("Final snapshot: %s\n", filepath.Base(snapPath2))
+
+	db2.Close()
+	fmt.Println("\n=== Persistence Demo Complete ===")
 }

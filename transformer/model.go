@@ -14,6 +14,20 @@ type Transformer struct {
 	DecoderLayers []*DecoderLayer
 	OutputProj    *tensor.Param
 	Dropout       float64
+	// Stored activations for backward pass
+	Cache *ActivationCache
+}
+
+// ActivationCache stores intermediate values needed for backpropagation
+type ActivationCache struct {
+	SrcEmbed    *tensor.Tensor
+	TgtEmbed    *tensor.Tensor
+	EncInput    *tensor.Tensor
+	EncOutputs  []*tensor.Tensor // output of each encoder layer
+	DecInput    *tensor.Tensor
+	EncFinal    *tensor.Tensor
+	DecOutputs  []*tensor.Tensor // output of each decoder layer
+	FinalOutput *tensor.Tensor
 }
 
 func NewTransformer(config Config) *Transformer {
@@ -61,19 +75,37 @@ func (t *Transformer) Forward(src, tgt, srcMask, tgtMask *tensor.Tensor, train b
 
 	srcFlat := srcEmbed.Reshape(batchSize*seqLen, dModel)
 	encOutput := srcFlat
-	for _, layer := range t.EncoderLayers {
+	encOutputs := make([]*tensor.Tensor, len(t.EncoderLayers))
+	for i, layer := range t.EncoderLayers {
 		encOutput = layer.Forward3D(encOutput, batchSize, seqLen, srcMask, train)
+		encOutputs[i] = encOutput
 	}
 
 	decTgtLen := tgtEmbed.Shape[1]
 	tgtFlat := tgtEmbed.Reshape(batchSize*decTgtLen, dModel)
 	decOutput := tgtFlat
-	for _, layer := range t.DecoderLayers {
+	decOutputs := make([]*tensor.Tensor, len(t.DecoderLayers))
+	for i, layer := range t.DecoderLayers {
 		decOutput = layer.Forward3D(decOutput, encOutput, batchSize, decTgtLen, tgtMask, srcMask, train)
+		decOutputs[i] = decOutput
 	}
 
 	logits := matMul2D(decOutput, t.OutputProj.Data)
 	logits = logits.Reshape(batchSize, decTgtLen, t.Config.VocabSize)
+
+	// Store activations for backward pass
+	if train {
+		t.Cache = &ActivationCache{
+			SrcEmbed:   srcEmbed,
+			TgtEmbed:   tgtEmbed,
+			EncInput:   srcFlat,
+			EncOutputs: encOutputs,
+			DecInput:   tgtFlat,
+			EncFinal:   encOutput,
+			DecOutputs: decOutputs,
+		}
+	}
+
 	return logits
 }
 

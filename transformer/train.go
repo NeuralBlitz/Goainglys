@@ -12,32 +12,106 @@ type Trainer struct {
 	beta1 float64
 	beta2 float64
 	eps   float64
-	m     map[*tensor.Param]*tensor.Tensor
-	v     map[*tensor.Param]*tensor.Tensor
+	m     map[*tensor.Param][]float64 // first moment
+	v     map[*tensor.Param][]float64 // second moment
 	step  int
 }
 
 func NewTrainer(model *Transformer, lr float64) *Trainer {
-	m := make(map[*tensor.Param]*tensor.Tensor)
-	v := make(map[*tensor.Param]*tensor.Tensor)
-
-	_ = m
-	_ = v
-
 	return &Trainer{
 		model: model,
 		lr:    lr,
+		beta1: 0.9,
+		beta2: 0.999,
+		eps:   1e-8,
+		m:     make(map[*tensor.Param][]float64),
+		v:     make(map[*tensor.Param][]float64),
 	}
 }
 
+// Step performs one training step: forward, loss, backward, Adam update
 func (t *Trainer) Step(src, tgt, srcMask, tgtMask *tensor.Tensor) float64 {
 	t.step++
 
+	// Forward + compute gradients
 	logits := t.model.Forward(src, tgt, srcMask, tgtMask, true)
-
 	loss := CrossEntropyLoss(logits, tgt)
+	ComputeGradients(t.model, src, tgt, srcMask, tgtMask, loss)
+
+	// Adam update on all parameters
+	lr := t.lr
+	if t.lr == 0 {
+		lr = 0.0001
+	}
+
+	t.updateParam(t.model.OutputProj, lr)
+	t.updateParam(t.model.Embedding.Weights, lr)
+
+	for _, layer := range t.model.EncoderLayers {
+		t.updateSubLayer(layer.SubLayer, lr)
+	}
+	for _, layer := range t.model.DecoderLayers {
+		t.updateSubLayer(layer.SubLayer1, lr)
+		t.updateSubLayer(layer.SubLayer2, lr)
+		t.updateSubLayer(layer.SubLayer3, lr)
+	}
 
 	return loss
+}
+
+func (t *Trainer) updateSubLayer(sl *SubLayer, lr float64) {
+	t.updateParam(sl.Attention.Wq, lr)
+	t.updateParam(sl.Attention.Wk, lr)
+	t.updateParam(sl.Attention.Wv, lr)
+	t.updateParam(sl.Attention.Wo, lr)
+	t.updateParam(sl.Ffn.W1, lr)
+	t.updateParam(sl.Ffn.W2, lr)
+	t.updateParam(sl.Ffn.B1, lr)
+	t.updateParam(sl.Ffn.B2, lr)
+	t.updateParam(sl.Ln1, lr)
+	t.updateParam(sl.Ln2, lr)
+}
+
+func (t *Trainer) updateParam(p *tensor.Param, lr float64) {
+	if p.Grad == nil {
+		return
+	}
+
+	n := len(p.Data.Data)
+	if n == 0 {
+		return
+	}
+
+	// Initialize moments if needed
+	if _, ok := t.m[p]; !ok {
+		t.m[p] = make([]float64, n)
+		t.v[p] = make([]float64, n)
+	}
+
+	m := t.m[p]
+	v := t.v[p]
+
+	// Bias correction
+	bc1 := 1.0 - math.Pow(t.beta1, float64(t.step))
+	bc2 := 1.0 - math.Pow(t.beta2, float64(t.step))
+
+	for i := 0; i < n; i++ {
+		g := p.Grad.Data[i]
+
+		// Update moments
+		m[i] = t.beta1*m[i] + (1.0-t.beta1)*g
+		v[i] = t.beta2*v[i] + (1.0-t.beta2)*g*g
+
+		// Bias-corrected moments
+		mHat := m[i] / bc1
+		vHat := v[i] / bc2
+
+		// Parameter update
+		p.Data.Data[i] -= lr * mHat / (math.Sqrt(vHat) + t.eps)
+
+		// Zero gradient
+		p.Grad.Data[i] = 0
+	}
 }
 
 func CrossEntropyLoss(logits, targets *tensor.Tensor) float64 {
@@ -127,12 +201,6 @@ func LabelSmoothingLoss(logits, targets *tensor.Tensor, smoothing float64) float
 	}
 
 	return totalLoss / count
-}
-
-var logSumExpEpoch float64
-
-func SetLogSumExp(val float64) {
-	logSumExpEpoch = val
 }
 
 type Optimizer struct {
