@@ -46,6 +46,9 @@ func (t *Tensor) Index(indices ...int) int {
 	idx := 0
 	multiplier := 1
 	for i := len(indices) - 1; i >= 0; i-- {
+		if indices[i] < 0 || indices[i] >= t.Shape[i] {
+			panic("tensor index out of bounds")
+		}
 		idx += indices[i] * multiplier
 		multiplier *= t.Shape[i]
 	}
@@ -68,10 +71,12 @@ func (t *Tensor) Reshape(shape ...int) *Tensor {
 	if newSize != t.Size() {
 		panic("cannot reshape: size mismatch")
 	}
+	newShape := append([]int(nil), shape...)
 	return &Tensor{
-		Data:  t.Data,
-		Shape: shape,
-		Grad:  t.Grad,
+		Data:    t.Data,
+		Shape:   newShape,
+		Grad:    t.Grad,
+		ReqGrad: t.ReqGrad,
 	}
 }
 
